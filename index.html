@@ -1,0 +1,1325 @@
+<!doctype html>
+<html lang="tr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yörünge</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Alışkanlıkların gezegen, odak seansların yıldız ışığı olan 3D odak ve alışkanlık evreni.">
+<meta name="theme-color" content="#02030a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Manrope:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: tam ekran sahne; üstünde ince çerçeveli gözlem panelleri — solda alışkanlıklar, sağda zamanlayıcı, altta istatistik şeridi. Mobilde alttan çekmece. */
+:root {
+  --void: #02030a;
+  --panel: rgba(5, 9, 20, 0.88);
+  --line: rgba(150, 175, 230, 0.20);
+  --line-strong: rgba(170, 195, 245, 0.42);
+  --ink: #e6ecf8;
+  --ink-dim: #8a96b2;
+  --ink-faint: #56607a;
+  --star: #ffb866;
+  --star-hot: #ffe4b8;
+  --danger: #ff6b6b;
+  --f-display: "Unbounded", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--f-body);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+.brand {
+  position: fixed;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  left: max(20px, env(safe-area-inset-left, 0px));
+  pointer-events: none;
+  z-index: 5;
+}
+.brand h1 {
+  margin: 0;
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 0.32em;
+  color: var(--star-hot);
+  text-shadow: 0 0 18px rgba(255, 184, 102, 0.45);
+}
+.brand p {
+  margin: 4px 0 0;
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* ---------- Gözlem panelleri ---------- */
+.dock {
+  position: fixed; inset: 0; z-index: 4; pointer-events: none;
+  display: grid;
+  grid-template-columns: minmax(0, 320px) 1fr minmax(0, 290px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "habits . timer" "stats . .";
+  gap: 12px 20px;
+  padding-top: calc(84px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+.panel {
+  pointer-events: auto;
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 14px 16px;
+  align-self: start;
+  min-height: 0;
+  min-width: 0;
+}
+.panel::before, .panel::after {
+  content: ""; position: absolute; width: 9px; height: 9px; pointer-events: none;
+  border-color: var(--star); border-style: solid; opacity: 0.75;
+}
+.panel::before { top: -1px; left: -1px; border-width: 1px 0 0 1px; }
+.panel::after { bottom: -1px; right: -1px; border-width: 0 1px 1px 0; }
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.eyebrow {
+  font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim);
+}
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+button { font: inherit; color: inherit; cursor: pointer; }
+.btn {
+  background: transparent; border: 1px solid var(--line-strong); color: var(--ink);
+  font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 8px 12px; transition: border-color .15s, background .15s, color .15s;
+}
+.btn:hover { border-color: var(--star); }
+.btn.primary { background: var(--star); border-color: var(--star); color: #1c0f02; font-weight: 600; }
+.btn.primary:hover { background: var(--star-hot); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--star); outline-offset: 2px; }
+input[type="text"], input[type="number"] {
+  background: rgba(0, 0, 0, 0.4); border: 1px solid var(--line); color: var(--ink);
+  font-family: var(--f-body); font-size: 14px; padding: 8px 10px; min-width: 0; border-radius: 0;
+}
+input:focus { border-color: var(--line-strong); }
+
+/* Alışkanlıklar */
+#habitPanel { grid-area: habits; max-height: 100%; display: flex; flex-direction: column; }
+#habitList { list-style: none; margin: 0 -8px; padding: 0; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.habit { display: grid; grid-template-columns: 1fr auto auto; align-items: center; border-left: 2px solid transparent; }
+.habit.selected { border-left-color: var(--c); background: rgba(150, 175, 230, 0.07); }
+.habit:hover { background: rgba(150, 175, 230, 0.05); }
+.h-main {
+  display: grid; grid-template-columns: 16px 12px 1fr; align-items: center; gap: 10px;
+  background: none; border: 0; padding: 9px 8px; text-align: left; min-width: 0;
+}
+.h-key { font-family: var(--f-mono); font-size: 10px; color: var(--ink-faint); }
+.h-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 10px var(--c); }
+.h-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.h-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-meta { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.h-meta .fire { color: var(--star); }
+.h-rename-input { width: 100%; padding: 4px 6px; font-size: 14px; }
+.icon-btn {
+  background: none; border: 0; color: var(--ink-faint); width: 30px; height: 30px; font-size: 14px;
+  display: grid; place-items: center; font-family: var(--f-mono);
+}
+.icon-btn:hover { color: var(--ink); }
+.icon-btn.confirm { color: var(--danger); width: auto; padding: 0 8px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+#addForm { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 12px; display: grid; gap: 10px; }
+.add-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.palette { display: flex; gap: 8px; flex-wrap: wrap; }
+.swatch { width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent; background: var(--c); padding: 0; box-shadow: inset 0 0 0 2px var(--void); }
+.swatch[aria-checked="true"] { border-color: var(--ink); }
+
+/* Zamanlayıcı */
+#timerPanel { grid-area: timer; margin-top: -64px; display: grid; gap: 14px; }
+#timerPanel .panel-head { margin-bottom: 0; }
+.t-target { font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .05em; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-dim); }
+.ring-wrap { position: relative; width: min(100%, 200px); aspect-ratio: 1; max-width: 100%; justify-self: center; }
+.ring { width: 100%; height: 100%; display: block; }
+.ring-track { fill: none; stroke: rgba(150, 175, 230, 0.12); stroke-width: 6; }
+.ring-ticks { fill: none; stroke: rgba(150, 175, 230, 0.28); stroke-width: 4; stroke-dasharray: 1 9.05; }
+.ring-prog { fill: none; stroke: var(--star); stroke-width: 6; stroke-linecap: round; transition: stroke .4s; filter: drop-shadow(0 0 6px currentColor); }
+.ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 4px; }
+.t-time { font-size: 40px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink); }
+.presets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.presets .btn { padding: 8px 6px; }
+.presets .btn[aria-pressed="true"] { border-color: var(--star); color: var(--star-hot); background: rgba(255, 184, 102, 0.08); }
+.custom { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: rgba(0,0,0,.4); padding-right: 6px; }
+.custom input { border: 0; background: transparent; width: 100%; padding: 7px 6px; font-family: var(--f-mono); font-size: 12px; -moz-appearance: textfield; }
+.custom input::-webkit-outer-spin-button, .custom input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.t-actions { display: grid; grid-template-columns: 1.6fr 1fr; gap: 6px; }
+.t-actions .btn { padding: 11px 12px; }
+.switch { display: flex; align-items: center; gap: 10px; font-size: 13px; cursor: pointer; user-select: none; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track { width: 30px; height: 16px; border: 1px solid var(--line-strong); position: relative; flex: none; transition: background .2s; }
+.switch .track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; background: var(--ink-dim); transition: transform .2s, background .2s; }
+.switch input:checked + .track { background: rgba(255, 184, 102, 0.15); border-color: var(--star); }
+.switch input:checked + .track::after { transform: translateX(14px); background: var(--star); }
+.switch input:focus-visible + .track { outline: 2px solid var(--star); outline-offset: 2px; }
+.dim { color: var(--ink-dim); font-size: 11px; }
+
+.keys { margin: 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-dim); line-height: 2; }
+.keys > span { white-space: nowrap; margin-right: 8px; }
+kbd { font-family: var(--f-mono); font-size: 10px; padding: 1px 5px; border: 1px solid var(--line-strong); color: var(--ink); margin-left: 6px; }
+kbd:first-child { margin-left: 0; }
+
+/* İstatistik */
+#statsPanel { grid-area: stats; display: grid; gap: 10px; }
+.stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat-v { font-family: var(--f-mono); font-size: 11px; color: var(--ink-dim); white-space: nowrap; }
+.stat-v b { font-family: var(--f-display); font-weight: 600; font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.chart-head { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.bars {
+  display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; height: 76px;
+  background: repeating-linear-gradient(to top, rgba(150,175,230,.08) 0 1px, transparent 1px 25%);
+  background-size: 100% calc(100% - 16px); background-repeat: no-repeat;
+}
+.bar { display: grid; grid-template-rows: 1fr 16px; min-width: 0; }
+.stack { display: flex; flex-direction: column-reverse; min-height: 0; }
+.stack span { display: block; min-height: 1px; opacity: .85; }
+.bar:hover .stack span { opacity: 1; }
+.wd { font-family: var(--f-mono); font-size: 9px; color: var(--ink-faint); text-align: center; line-height: 16px; }
+.bar.today .wd { color: var(--star); }
+.sample-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink-dim); }
+.link-btn { background: none; border: 0; padding: 0; color: var(--star); text-decoration: underline; text-underline-offset: 3px; font-size: 12px; }
+
+/* Bildirim */
+.toast {
+  position: fixed; left: 50%; top: calc(20px + env(safe-area-inset-top, 0px)); z-index: 8;
+  transform: translate(-50%, -12px); opacity: 0; transition: opacity .3s, transform .3s;
+  max-width: min(460px, calc(100% - 32px)); padding: 10px 16px;
+  background: var(--panel); border: 1px solid var(--star); color: var(--ink); font-size: 14px; line-height: 1.45; text-align: center;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* Gezegen etiketi */
+.label {
+  position: fixed; left: 0; top: 0; z-index: 3; pointer-events: none;
+  padding: 6px 10px; background: var(--panel); border: 1px solid var(--line-strong);
+  white-space: nowrap; transform: translate(-50%, -100%);
+}
+.label b { display: block; font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .06em; }
+.label span { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink-dim); }
+
+/* ---------- Mobil: alttan açılan çekmece ---------- */
+.tabs { display: none; }
+@media (max-width: 760px) {
+  .brand { top: calc(14px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); }
+  .brand h1 { font-size: 15px; }
+  .brand p { font-size: 9.5px; }
+  .dock {
+    inset: auto 0 0 0; display: flex; flex-direction: column; max-height: 74%;
+    padding-top: 0;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    background: var(--panel); border-top: 1px solid var(--line-strong);
+    pointer-events: auto;
+  }
+  .tabs { display: block; flex: none; }
+  .grip { display: grid; place-items: center; width: 100%; height: 22px; background: none; border: 0; padding: 0; }
+  .grip span { width: 42px; height: 3px; background: var(--line-strong); }
+  .tab-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .tab-row [role="tab"] {
+    background: none; border: 0; border-bottom: 2px solid transparent; padding: 6px 4px 10px;
+    font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-dim);
+  }
+  .tab-row [role="tab"][aria-selected="true"] { color: var(--ink); }
+  .dock.open .tab-row [role="tab"][aria-selected="true"] { border-bottom-color: var(--star); }
+  #mobileTimer { color: var(--star); letter-spacing: 0; }
+  .dock { background: rgba(5, 9, 20, 0.96); }
+  .panel {
+    background: none; border: 0; padding: 14px 0 6px; margin-top: 0; align-self: stretch;
+    overflow-y: auto; flex: 1 1 auto; min-height: 0; max-height: none;
+  }
+  #habitPanel, #timerPanel, #statsPanel { display: none; }
+  #timerPanel { margin-top: 0; }
+  .panel::before, .panel::after { display: none; }
+  .dock.open[data-tab="habits"] #habitPanel { display: flex; }
+  .dock.open[data-tab="timer"] #timerPanel,
+  .dock.open[data-tab="stats"] #statsPanel { display: grid; }
+  #habitPanel { max-height: none; }
+  #habitList { overflow: visible; }
+  .h-main { padding: 11px 8px; }
+  .icon-btn { width: 40px; height: 40px; }
+  .ring-wrap { width: 168px; }
+  .t-time { font-size: 34px; }
+  .keys { display: none; }
+  .label { display: none; }
+  .toast { top: calc(56px + env(safe-area-inset-top, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+}
+</style>
+
+<canvas id="scene" aria-label="Alışkanlık evreni: merkezdeki odak yıldızının çevresinde dönen gezegenler"></canvas>
+
+<header class="brand">
+  <h1>YÖRÜNGE</h1>
+  <p id="brandSub">odak evreni</p>
+</header>
+
+<div class="dock" id="dock" data-tab="habits">
+  <nav class="tabs" aria-label="Paneller">
+    <button type="button" class="grip" id="sheetToggle" aria-expanded="false" aria-controls="dock" aria-label="Paneli aç ya da kapat"><span></span></button>
+    <div class="tab-row" role="tablist">
+      <button type="button" role="tab" data-tab="habits" aria-selected="true">Gezegenler</button>
+      <button type="button" role="tab" data-tab="timer" aria-selected="false">Odak <span id="mobileTimer" class="mono"></span></button>
+      <button type="button" role="tab" data-tab="stats" aria-selected="false">İstatistik</button>
+    </div>
+  </nav>
+  <aside class="panel" id="habitPanel" aria-label="Alışkanlıklar">
+    <div class="panel-head">
+      <span class="eyebrow">Gezegenler</span>
+      <span class="eyebrow mono" id="habitCount"></span>
+    </div>
+    <ol id="habitList"></ol>
+    <form id="addForm" autocomplete="off">
+      <label class="eyebrow" for="newName">Yeni alışkanlık</label>
+      <div class="add-row">
+        <input type="text" id="newName" maxlength="24" placeholder="ör. Günlük yazmak" required>
+        <button class="btn" type="submit">Ekle</button>
+      </div>
+      <div class="palette" id="palette" role="radiogroup" aria-label="Gezegen rengi"></div>
+    </form>
+  </aside>
+
+  <aside class="panel" id="timerPanel" aria-label="Odak zamanlayıcı">
+    <div class="panel-head">
+      <span class="eyebrow">Odak seansı</span>
+      <span class="t-target" id="timerTarget"></span>
+    </div>
+    <div class="ring-wrap">
+      <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
+        <circle cx="100" cy="100" r="88" class="ring-track"></circle>
+        <circle cx="100" cy="100" r="96" class="ring-ticks"></circle>
+        <circle cx="100" cy="100" r="88" class="ring-prog" id="ringProg" transform="rotate(-90 100 100)"></circle>
+      </svg>
+      <div class="ring-center">
+        <div class="t-time mono" id="timeLeft" role="timer" aria-live="off">25:00</div>
+        <div class="eyebrow" id="timerState">hazır</div>
+      </div>
+    </div>
+    <div class="presets" role="group" aria-label="Süre">
+      <button class="btn" type="button" data-min="25" aria-pressed="true">25 dk</button>
+      <button class="btn" type="button" data-min="50" aria-pressed="false">50 dk</button>
+      <label class="custom" for="customMin"><input type="number" id="customMin" min="1" max="180" placeholder="özel" inputmode="numeric"><span class="eyebrow">dk</span></label>
+    </div>
+    <div class="t-actions">
+      <button class="btn primary" type="button" id="startBtn">Başlat</button>
+      <button class="btn" type="button" id="resetBtn">Sıfırla</button>
+    </div>
+    <label class="switch" for="fastMode">
+      <input type="checkbox" id="fastMode">
+      <span class="track" aria-hidden="true"></span>
+      <span>Hızlı mod <span class="mono dim">60× demo</span></span>
+    </label>
+    <p class="keys"><span><kbd>Space</kbd> başlat/duraklat</span> <span><kbd>1–9</kbd> gezegen seç</span> <span><kbd>Esc</kbd> genel görünüm</span></p>
+  </aside>
+
+  <section class="panel" id="statsPanel" aria-label="İstatistik">
+    <div class="stat-row">
+      <div class="stat"><span class="eyebrow">Toplam</span><span class="stat-v"><b id="statTotal">0</b> sa</span></div>
+      <div class="stat"><span class="eyebrow">Rekor seri</span><span class="stat-v"><b id="statStreak">0</b> gün</span></div>
+      <div class="stat"><span class="eyebrow">Bugün</span><span class="stat-v"><b id="statToday">0</b> dk</span></div>
+    </div>
+    <div class="chart-head"><span class="eyebrow">Son 14 gün · odak dakikası</span><span class="eyebrow mono" id="chartMax"></span></div>
+    <div class="bars" id="bars"></div>
+    <p class="sample-note" id="sampleNote" hidden>Örnek veriyle açıldı. İlk seansın ya da değişikliğin kaydedilir. <button type="button" class="link-btn" id="clearSample">Boş evrenle başla</button></p>
+  </section>
+</div>
+
+<div class="label" id="label" hidden><b></b><span></span></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- Renderer & sahne ---------- */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 760 ? 1.75 : 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x02030a);
+scene.fog = new THREE.FogExp2(0x040818, 0.0032);
+
+const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 4000);
+const BASE_HOME = new THREE.Vector3(0, 46, 118);
+// Dar/dikey ekranda yörüngelerin tamamı sığsın diye kamerayı uzaklaştır
+const viewFit = () => Math.max(1, 0.95 / camera.aspect);
+const HOME_POS = BASE_HOME.clone().multiplyScalar(viewFit());
+const INTRO_POS = new THREE.Vector3(60, 300, 720);
+
+/* Lacivert gökyüzü kubbesi: galaktik düzlemde hafif lacivert, kutuplarda siyah */
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(2000, 32, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {},
+    vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: `varying vec3 vDir;
+      void main(){
+        float band = 1. - abs(vDir.y + 0.15*sin(vDir.x*3.));
+        band = pow(clamp(band,0.,1.), 5.);
+        vec3 col = mix(vec3(0.004,0.006,0.016), vec3(0.022,0.034,0.095), band);
+        col += vec3(0.018,0.008,0.03) * pow(band, 3.);
+        gl_FragColor = vec4(col, 1.);
+      }`
+  })
+);
+scene.add(sky);
+
+/* ---------- Yıldız alanı (2 katman, parallax) ---------- */
+function makeStarLayer(count, rMin, rMax, sizeMin, sizeMax) {
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  const size = new Float32Array(count);
+  const phase = new Float32Array(count);
+  const tints = [new THREE.Color(0xbcd0ff), new THREE.Color(0xffffff), new THREE.Color(0xffe2c0), new THREE.Color(0xa8b8ff), new THREE.Color(0xffc9a0)];
+  for (let i = 0; i < count; i++) {
+    const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2;
+    // Galaktik düzleme hafif yoğunlaşma
+    const flat = Math.random() < 0.45 ? 0.25 : 1;
+    const s = Math.sqrt(1 - u * u);
+    const r = rMin + Math.random() * (rMax - rMin);
+    pos.set([r * s * Math.cos(th), r * u * flat, r * s * Math.sin(th)], i * 3);
+    const c = tints[(Math.random() * tints.length) | 0];
+    const b = 0.5 + Math.random() * 0.7;
+    col.set([c.r * b, c.g * b, c.b * b], i * 3);
+    size[i] = sizeMin + Math.pow(Math.random(), 3) * (sizeMax - sizeMin);
+    phase[i] = Math.random() * 100;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('aSize', new THREE.BufferAttribute(size, 1));
+  g.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    uniforms: { uTime: { value: 0 }, uPR: { value: renderer.getPixelRatio() } },
+    vertexShader: `attribute float aSize; attribute vec3 aColor; attribute float aPhase;
+      uniform float uTime; uniform float uPR; varying vec3 vColor;
+      void main(){
+        vec4 mv = modelViewMatrix*vec4(position,1.);
+        gl_Position = projectionMatrix*mv;
+        float tw = 0.7 + 0.3*sin(uTime*1.3 + aPhase);
+        vColor = aColor * tw;
+        gl_PointSize = clamp(aSize * uPR * (420. / -mv.z), 1., 9. * uPR);
+      }`,
+    fragmentShader: `varying vec3 vColor;
+      void main(){
+        float d = length(gl_PointCoord - .5);
+        float a = smoothstep(.5, 0., d); a *= a;
+        gl_FragColor = vec4(vColor, a);
+      }`
+  });
+  return new THREE.Points(g, m);
+}
+const starsFar = makeStarLayer(3600, 600, 1500, 1.2, 4.2);
+const starsNear = makeStarLayer(900, 220, 480, 0.8, 2.6);
+const starGroup = new THREE.Group();
+starGroup.add(starsFar, starsNear);
+scene.add(starGroup);
+
+/* ---------- Merkez: odak yıldızı ---------- */
+const NOISE = `
+  float hash(vec3 p){ p = fract(p*0.3183099 + .1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+  float noise(vec3 x){ vec3 i = floor(x); vec3 f = fract(x); f = f*f*(3.-2.*f);
+    return mix(mix(mix(hash(i+vec3(0,0,0)),hash(i+vec3(1,0,0)),f.x), mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+               mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x), mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y), f.z); }
+  float fbm(vec3 p){ float v=0., a=.5; for(int i=0;i<5;i++){ v+=a*noise(p); p*=2.03; a*=.5; } return v; }`;
+
+const STAR_R = 6.5;
+const starUniforms = { uTime: { value: 0 }, uPulse: { value: 1 }, uBoost: { value: 0 } };
+const core = new THREE.Mesh(
+  new THREE.SphereGeometry(STAR_R, 96, 64),
+  new THREE.ShaderMaterial({
+    uniforms: starUniforms, fog: false,
+    vertexShader: `varying vec3 vPos; varying vec3 vN; varying vec3 vView;
+      void main(){ vPos = position; vN = normalize(normalMatrix*normal);
+        vec4 mv = modelViewMatrix*vec4(position,1.); vView = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`,
+    fragmentShader: `uniform float uTime; uniform float uPulse; uniform float uBoost;
+      varying vec3 vPos; varying vec3 vN; varying vec3 vView;
+      ${NOISE}
+      void main(){
+        vec3 p = normalize(vPos)*2.2;
+        float n = fbm(p + vec3(0., uTime*0.12, uTime*0.05));
+        float n2 = fbm(p*2.4 - vec3(uTime*0.2, 0., 0.));
+        float cells = smoothstep(.35, .8, n*0.7 + n2*0.5);
+        vec3 deep = vec3(1.0, 0.36, 0.08);
+        vec3 hot  = vec3(1.0, 0.86, 0.6);
+        vec3 col = mix(deep, hot, cells);
+        float mu = clamp(dot(vN, vView), 0., 1.);
+        col *= 0.55 + 0.6*pow(mu, .45);           // kenar kararması
+        col += vec3(1.,.55,.2) * pow(1.-mu, 3.) * .9; // kenar ışıması
+        gl_FragColor = vec4(col * (2.0 + uBoost) * uPulse, 1.);
+      }`
+  })
+);
+scene.add(core);
+
+function glowTexture(stops) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'); const g = x.createRadialGradient(128, 128, 0, 128, 128, 128);
+  stops.forEach(([o, s]) => g.addColorStop(o, s));
+  x.fillStyle = g; x.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const coronaTex = glowTexture([[0, 'rgba(255,220,170,1)'], [0.18, 'rgba(255,170,90,0.55)'], [0.45, 'rgba(255,110,40,0.12)'], [1, 'rgba(0,0,0,0)']]);
+const corona = new THREE.Sprite(new THREE.SpriteMaterial({ map: coronaTex, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
+corona.scale.setScalar(54);
+scene.add(corona);
+const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: coronaTex, color: 0xff8a3c, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
+halo.scale.setScalar(140);
+scene.add(halo);
+
+const sunLight = new THREE.PointLight(0xffe0b8, 3.2, 0, 0);
+scene.add(sunLight);
+scene.add(new THREE.AmbientLight(0x30406a, 0.35));
+
+/* ---------- Post-processing ---------- */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.9, 0.55, 0.7);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ---------- Kontroller ---------- */
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 10;
+controls.maxDistance = 320;
+controls.enablePan = false;
+controls.autoRotateSpeed = 0.35;
+controls.enabled = false;
+let lastInteract = performance.now();
+controls.addEventListener('start', () => { controls.autoRotate = false; lastInteract = performance.now(); });
+controls.addEventListener('end', () => { lastInteract = performance.now(); });
+
+/* ---------- Açılış süzülmesi ---------- */
+const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+let intro = reduceMotion ? null : { t: 0, dur: 3 };
+camera.position.copy(reduceMotion ? HOME_POS : INTRO_POS);
+camera.lookAt(0, 0, 0);
+if (reduceMotion) controls.enabled = true;
+
+/* ---------- Fare parallax ---------- */
+const mouse = { x: 0, y: 0 };
+addEventListener('pointermove', e => { mouse.x = e.clientX / innerWidth * 2 - 1; mouse.y = e.clientY / innerHeight * 2 - 1; });
+
+/* =====================================================================
+   FAZ 2 — Alışkanlık gezegenleri
+   ===================================================================== */
+const PALETTE = ['#ffb866', '#ff6f7d', '#c38bff', '#6f9bff', '#4fd6e8', '#5fe0a0', '#e8dd6a', '#ff9ad5'];
+const DAY = 86400000;
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function startOfDay(t) { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function shiftDay(t, n) { const d = new Date(t); d.setDate(d.getDate() + n); return startOfDay(d.getTime()); }
+
+/* Örnek evren: bugünden geriye dönük seanslar (kişinin kendi verisi değil) */
+function sampleState() {
+  const rnd = mulberry32(20261106);
+  const today = startOfDay(Date.now());
+  const mk = (name, color, dayOffsets, mins) => {
+    const sessions = [];
+    dayOffsets.forEach(off => {
+      const n = rnd() < 0.3 ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const t = shiftDay(today, -off) + (8 + rnd() * 13) * 3600000;
+        sessions.push({ t: Math.round(t), min: mins[(rnd() * mins.length) | 0] });
+      }
+    });
+    sessions.sort((a, b) => a.t - b.t);
+    return { id: uid(), name, color, minutes: sessions.reduce((s, x) => s + x.min, 0), sessions, moons: sessions.length };
+  };
+  const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  return {
+    habits: [
+      mk('Kodlama', '#6f9bff', range(1, 31), [25, 50, 50]),
+      mk('Kitap okuma', '#ffb866', range(1, 8), [25, 25, 50]),
+      mk('Meditasyon', '#5fe0a0', range(1, 4).concat([9, 12]), [10, 15]),
+      mk('İngilizce', '#c38bff', [2, 5, 6, 11, 15, 19], [25, 50]),
+      mk('Resim', '#ff6f7d', [3, 13], [50]),
+    ],
+    sample: true,
+  };
+}
+
+/* Kalıcılık (Faz 4): şema {habits:[{id,name,color,minutes,sessions:[{t,min}],moons}]} */
+const STORE_KEY = 'yorunge.v1';
+function validHabit(h) {
+  return h && typeof h.id === 'string' && typeof h.name === 'string' && /^#[0-9a-f]{6}$/i.test(h.color) && Array.isArray(h.sessions);
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.habits)) {
+        const habits = d.habits.filter(validHabit).map(h => {
+          const sessions = h.sessions.filter(s => Number.isFinite(s?.t) && Number.isFinite(s?.min) && s.min > 0);
+          return { id: h.id, name: h.name.slice(0, 24), color: h.color, sessions,
+            minutes: Number.isFinite(h.minutes) ? h.minutes : sessions.reduce((a, s) => a + s.min, 0),
+            moons: Number.isFinite(h.moons) ? h.moons : sessions.length };
+        });
+        return { habits, sample: false };
+      }
+    }
+  } catch (e) { /* bozuk ya da erişilemeyen depolama: örnekle aç */ }
+  return sampleState();
+}
+function saveState() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify({ habits: state.habits.map(({ id, name, color, minutes, sessions, moons }) => ({ id, name, color, minutes, sessions, moons })) }));
+  } catch (e) { /* depolama kapalıysa oturum içinde devam */ }
+}
+
+let state = loadState();
+let selectedId = null;
+
+/* Seri hesabı: bugün ya da dün biten ardışık günler */
+function streakInfo(h) {
+  const days = new Set(h.sessions.map(s => startOfDay(s.t)));
+  let cur = 0, d = startOfDay(Date.now());
+  if (!days.has(d)) d = shiftDay(d, -1);
+  while (days.has(d)) { cur++; d = shiftDay(d, -1); }
+  const sorted = [...days].sort((a, b) => a - b);
+  let longest = 0, run = 0, prev = null;
+  for (const x of sorted) { run = prev !== null && Math.round((x - prev) / DAY) === 1 ? run + 1 : 1; longest = Math.max(longest, run); prev = x; }
+  return { cur, longest };
+}
+const ringTier = cur => cur >= 30 ? 3 : cur >= 7 ? 2 : cur >= 3 ? 1 : 0;
+const fmtHours = min => (min / 60).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+
+/* ---------- Gezegen yapımı ---------- */
+const planets = new Map(); // id -> planet
+const planetRoot = new THREE.Group();
+scene.add(planetRoot);
+const sphereGeo = new THREE.SphereGeometry(1, 64, 40);
+const moonGeo = new THREE.IcosahedronGeometry(0.3, 0);
+const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
+
+function hashStr(s) { let h = 2166136261; for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967295; }
+const sizeFor = min => 1.1 + Math.min(3.4, Math.sqrt(min) / 7.5);
+const radiusFor = i => 17 + i * 8.5;
+
+function surfaceTexture(hex, seed) {
+  const rnd = mulberry32(Math.floor(seed * 1e9));
+  const w = 256, h = 128, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d');
+  const base = new THREE.Color(hex);
+  const bands = 5 + Math.floor(rnd() * 6);
+  for (let y = 0; y < h; y++) {
+    const v = Math.sin(y / h * Math.PI * bands + rnd() * 0.4) * 0.5 + 0.5;
+    const col = base.clone().offsetHSL((rnd() - 0.5) * 0.02, -0.05 * v, (v - 0.5) * 0.22);
+    x.fillStyle = col.getStyle(); x.fillRect(0, y, w, 1);
+  }
+  for (let i = 0; i < 260; i++) { // fırtına lekeleri
+    x.fillStyle = `rgba(255,255,255,${rnd() * 0.06})`;
+    x.beginPath(); x.ellipse(rnd() * w, rnd() * h, 2 + rnd() * 14, 1 + rnd() * 3, 0, 0, Math.PI * 2); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; return t;
+}
+
+const atmoVert = `varying vec3 vN; varying vec3 vView;
+  void main(){ vN = normalize(normalMatrix*normal); vec4 mv = modelViewMatrix*vec4(position,1.); vView = normalize(-mv.xyz); gl_Position = projectionMatrix*mv; }`;
+const atmoFrag = `uniform vec3 uColor; uniform float uIntensity; varying vec3 vN; varying vec3 vView;
+  void main(){ float f = pow(1. - max(dot(vN, vView), 0.), 2.6); gl_FragColor = vec4(uColor * f * uIntensity, f); }`;
+
+function makeOrbitLine(color) {
+  const pts = [];
+  for (let i = 0; i <= 160; i++) { const a = i / 160 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a), 0, Math.sin(a))); }
+  return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.2, depthWrite: false }));
+}
+
+function createPlanet(habit, index) {
+  const color = new THREE.Color(habit.color);
+  const h = hashStr(habit.id);
+  const pivot = new THREE.Group();
+  pivot.rotation.order = 'YXZ';
+  pivot.rotation.set((h - 0.5) * 0.42, h * Math.PI * 2, 0);
+  planetRoot.add(pivot);
+
+  const orbit = makeOrbitLine(color);
+  pivot.add(orbit);
+
+  const body = new THREE.Group();
+  pivot.add(body);
+  const mat = new THREE.MeshStandardMaterial({ map: surfaceTexture(habit.color, h), roughness: 0.75, metalness: 0.05, emissive: color, emissiveIntensity: 0.12 });
+  const mesh = new THREE.Mesh(sphereGeo, mat);
+  mesh.rotation.z = (h - 0.5) * 0.6;
+  mesh.userData.id = habit.id;
+  body.add(mesh);
+  const atmo = new THREE.Mesh(sphereGeo, new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: color.clone().multiplyScalar(1.4) }, uIntensity: { value: 1 } },
+    vertexShader: atmoVert, fragmentShader: atmoFrag,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  body.add(atmo);
+
+  const moons = new THREE.Group();
+  body.add(moons);
+  const rings = new THREE.Group();
+  rings.rotation.x = -Math.PI / 2 + (h - 0.5) * 0.7;
+  body.add(rings);
+
+  const size = sizeFor(habit.minutes);
+  const p = {
+    id: habit.id, habit, pivot, orbit, body, mesh, atmo, moons, rings, color,
+    radius: radiusFor(index), targetRadius: radiusFor(index),
+    angle: hashStr(habit.id + 'a') * Math.PI * 2,
+    size: index === undefined ? 0.01 : size, targetSize: size,
+    hover: 0, flash: 0, tier: -1, spin: 0.1 + h * 0.25,
+  };
+  planets.set(habit.id, p);
+  syncMoons(p, false);
+  syncRings(p);
+  return p;
+}
+
+function syncMoons(p, animate) {
+  const want = Math.min(p.habit.moons, 12);
+  while (p.moons.children.length < want) {
+    const k = p.moons.children.length;
+    const rnd = mulberry32(Math.floor(hashStr(p.id + k) * 1e9));
+    const m = new THREE.Mesh(moonGeo, new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0xffffff).lerp(p.color, 0.35), emissive: p.color, emissiveIntensity: 0.35, flatShading: true, roughness: 0.3, metalness: 0.2,
+    }));
+    m.userData = { r: 1.55 + k * 0.32 + rnd() * 0.25, speed: (0.5 + rnd() * 0.8) * (rnd() < 0.5 ? 1 : -1), a: rnd() * Math.PI * 2, tilt: (rnd() - 0.5) * 1.2, s: 0.55 + rnd() * 0.6, born: animate ? 0 : 1 };
+    p.moons.add(m);
+  }
+  while (p.moons.children.length > want) p.moons.remove(p.moons.children[p.moons.children.length - 1]);
+}
+
+function syncRings(p) {
+  const tier = ringTier(streakInfo(p.habit).cur);
+  if (tier === p.tier) return false;
+  const grew = tier > p.tier && p.tier !== -1;
+  p.tier = tier;
+  p.rings.clear();
+  const spec = [[1.55, 1.95, 0.5], [2.1, 2.3, 0.32], [2.45, 2.55, 0.22]];
+  for (let i = 0; i < tier; i++) {
+    const [a, b, o] = spec[i];
+    const ring = new THREE.Mesh(new THREE.RingGeometry(a, b, 128, 1), new THREE.MeshBasicMaterial({
+      color: p.color.clone().lerp(new THREE.Color(0xffffff), 0.25), transparent: true, opacity: o, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    ring.userData.o = o;
+    p.rings.add(ring);
+  }
+  return grew;
+}
+
+function removePlanet(id) {
+  const p = planets.get(id);
+  if (!p) return;
+  planetRoot.remove(p.pivot);
+  p.pivot.traverse(o => { if (o.material) { o.material.map?.dispose(); o.material.dispose(); } if (o.geometry && o.geometry !== sphereGeo && o.geometry !== moonGeo) o.geometry.dispose(); });
+  planets.delete(id);
+}
+
+function relayout() {
+  state.habits.forEach((h, i) => { const p = planets.get(h.id); if (p) p.targetRadius = radiusFor(i); });
+}
+
+state.habits.forEach((h, i) => createPlanet(h, i));
+
+function planetWorldPos(p, out) { return p.body.getWorldPosition(out); }
+
+function updatePlanets(dt, motion) {
+  for (const p of planets.values()) {
+    p.radius += (p.targetRadius - p.radius) * Math.min(1, dt * 2);
+    p.size += (p.targetSize - p.size) * Math.min(1, dt * 1.6);
+    p.angle += dt * motion * 0.11 / Math.pow(p.radius / 17, 1.5);
+    p.body.position.set(Math.cos(p.angle) * p.radius, 0, Math.sin(p.angle) * p.radius);
+    p.orbit.scale.setScalar(p.radius);
+    p.mesh.scale.setScalar(p.size);
+    p.mesh.rotation.y += dt * p.spin * motion;
+    p.atmo.scale.setScalar(p.size * 1.22);
+    p.rings.scale.setScalar(p.size);
+    const sel = p.id === selectedId;
+    p.hover += ((p === hovered ? 1 : 0) - p.hover) * Math.min(1, dt * 8);
+    p.flash = Math.max(0, p.flash - dt * 0.6);
+    // Parlaklık: toplam seans arttıkça artar
+    const glow = Math.min(0.45, p.habit.sessions.length / 70);
+    p.mesh.material.emissiveIntensity = 0.1 + glow + p.hover * 0.25 + p.flash * 1.6 + (p.streaming || 0) * 0.35;
+    p.atmo.material.uniforms.uIntensity.value = 1 + glow * 2 + p.hover * 1.6 + p.flash * 4 + (sel ? 0.6 : 0);
+    p.orbit.material.opacity = 0.16 + (sel ? 0.4 : 0) + p.hover * 0.25;
+    p.moons.children.forEach(m => {
+      const u = m.userData;
+      u.born = Math.min(1, u.born + dt * 0.7);
+      u.a += dt * u.speed * motion;
+      const k = easeInOutCubic(u.born);
+      const r = (u.r * p.size + 0.8) * (1 + (1 - k) * 2.5);
+      m.position.set(Math.cos(u.a) * r, Math.sin(u.a) * r * Math.sin(u.tilt), Math.sin(u.a) * r * Math.cos(u.tilt));
+      m.scale.setScalar(u.s * Math.max(0.001, k) * (0.8 + p.size * 0.12));
+      m.rotation.x += dt * 0.7; m.rotation.y += dt * 0.5;
+    });
+  }
+}
+
+/* ---------- Hover & tıklama ---------- */
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2(9, 9);
+let hovered = null, pointerInside = false;
+const labelEl = $('#label');
+canvas.addEventListener('pointermove', e => { ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); pointerInside = true; });
+canvas.addEventListener('pointerleave', () => { pointerInside = false; });
+let downAt = null;
+canvas.addEventListener('pointerdown', e => { downAt = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('pointerup', e => {
+  if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) return;
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  const hit = pick();
+  if (hit) selectHabit(hit.id, true);
+});
+function pick() {
+  raycaster.setFromCamera(ndc, camera);
+  const meshes = [...planets.values()].map(p => p.mesh);
+  const hits = raycaster.intersectObjects(meshes, false);
+  return hits.length ? planets.get(hits[0].object.userData.id) : null;
+}
+function updateHover() {
+  hovered = pointerInside && !intro ? pick() : null;
+  canvas.style.cursor = hovered ? 'pointer' : '';
+  const show = hovered || (selectedId && planets.get(selectedId));
+  if (!show) { labelEl.hidden = true; return; }
+  planetWorldPos(show, tmpV);
+  tmpV.y += show.size * 1.35;
+  tmpV.project(camera);
+  if (tmpV.z > 1) { labelEl.hidden = true; return; }
+  labelEl.hidden = false;
+  labelEl.style.transform = `translate(${(tmpV.x * 0.5 + 0.5) * innerWidth}px, ${(-tmpV.y * 0.5 + 0.5) * innerHeight - 8}px) translate(-50%, -100%)`;
+  const s = streakInfo(show.habit);
+  labelEl.querySelector('b').textContent = show.habit.name;
+  labelEl.querySelector('span').textContent = `${show.habit.minutes} dk · ${show.habit.moons} ay · seri ${s.cur} gün`;
+}
+
+/* ---------- Kamera uçuşu ---------- */
+let flight = null; // { to: 'planet'|'home', p, t, fromPos, fromTarget, last }
+function flyTo(p) {
+  flight = { to: 'planet', p, t: reduceMotion ? 1 : 0, dur: 1.4, fromPos: camera.position.clone(), fromTarget: controls.target.clone(), last: planetWorldPos(p, new THREE.Vector3()) };
+  controls.autoRotate = false;
+}
+function flyHome() {
+  flight = { to: 'home', t: reduceMotion ? 1 : 0, dur: 1.6, fromPos: camera.position.clone(), fromTarget: controls.target.clone() };
+}
+function camOffsetFor(p, wp) {
+  // Yıldızı yan tarafta tut: dışa doğru + teğet yönünde, biraz yukarıdan
+  const dist = (p.targetSize * 5.2 + 14) * Math.min(viewFit(), 1.7);
+  const out = tmpV2.copy(wp).setY(0).normalize();
+  const tangent = new THREE.Vector3(-out.z, 0, out.x);
+  return out.multiplyScalar(dist * 0.45).addScaledVector(tangent, dist * 0.8).add(new THREE.Vector3(0, dist * 0.42, 0)).add(wp);
+}
+function updateFlight(dt, now) {
+  if (!flight) return false;
+  if (flight.to === 'planet') {
+    const p = flight.p;
+    if (!planets.has(p.id)) { flight = null; return false; }
+    const wp = planetWorldPos(p, new THREE.Vector3());
+    if (flight.t < 1) {
+      flight.t = Math.min(1, flight.t + dt / flight.dur);
+      const k = easeInOutCubic(flight.t);
+      controls.target.lerpVectors(flight.fromTarget, wp, k);
+      camera.position.lerpVectors(flight.fromPos, camOffsetFor(p, wp), k);
+      camera.lookAt(controls.target);
+      flight.last.copy(wp);
+      if (flight.t >= 1) lastInteract = now;
+      return true;
+    }
+    // Takip modu: gezegenle birlikte hareket et, kullanıcı yine döndürebilir
+    camera.position.add(tmpV.subVectors(wp, flight.last));
+    controls.target.copy(wp);
+    flight.last.copy(wp);
+    return false;
+  }
+  flight.t = Math.min(1, flight.t + dt / flight.dur);
+  const k = easeInOutCubic(flight.t);
+  controls.target.lerpVectors(flight.fromTarget, tmpV.set(0, 0, 0), k);
+  camera.position.lerpVectors(flight.fromPos, HOME_POS, k);
+  camera.lookAt(controls.target);
+  if (flight.t >= 1) { flight = null; lastInteract = now; }
+  return !!flight;
+}
+
+/* ---------- Panel: listele / ekle / sil / yeniden adlandır ---------- */
+const listEl = $('#habitList');
+let newColor = PALETTE[0];
+let pendingDelete = null;
+
+function renderPalette() {
+  const used = new Set(state.habits.map(h => h.color));
+  const pal = $('#palette');
+  pal.innerHTML = PALETTE.map((c, i) => `<button type="button" class="swatch" role="radio" style="--c:${c}" data-c="${c}" aria-checked="${c === newColor}" aria-label="Renk ${i + 1}${used.has(c) ? ' (kullanımda)' : ''}"></button>`).join('');
+}
+$('#palette').addEventListener('click', e => {
+  const b = e.target.closest('.swatch'); if (!b) return;
+  newColor = b.dataset.c; renderPalette();
+});
+
+function renderList() {
+  listEl.innerHTML = state.habits.map((h, i) => {
+    const s = streakInfo(h);
+    const confirming = pendingDelete === h.id;
+    return `<li class="habit${h.id === selectedId ? ' selected' : ''}" data-id="${h.id}" style="--c:${h.color}">
+      <button class="h-main" data-act="select" aria-pressed="${h.id === selectedId}">
+        <span class="h-key">${i < 9 ? i + 1 : ''}</span><span class="h-dot"></span>
+        <span class="h-text"><span class="h-name">${esc(h.name)}</span>
+        <span class="h-meta">${fmtHours(h.minutes)} sa · ${h.moons} ay${s.cur ? ` · <span class="fire">seri ${s.cur}g</span>` : ''}</span></span>
+      </button>
+      <button class="icon-btn" data-act="rename" aria-label="${esc(h.name)} adını değiştir" title="Yeniden adlandır">✎</button>
+      <button class="icon-btn${confirming ? ' confirm' : ''}" data-act="delete" aria-label="${esc(h.name)} sil" title="Sil">${confirming ? 'Sil?' : '✕'}</button>
+    </li>`;
+  }).join('');
+  $('#habitCount').textContent = `${state.habits.length} gezegen`;
+  const total = state.habits.reduce((s, h) => s + h.minutes, 0);
+  $('#brandSub').textContent = `odak evreni · ${fmtHours(total)} saat`;
+  renderPalette();
+  onDataChange();
+}
+
+listEl.addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]'); if (!btn) return;
+  const id = btn.closest('.habit').dataset.id;
+  const act = btn.dataset.act;
+  if (act === 'select') selectHabit(id, true);
+  if (act === 'rename') startRename(id);
+  if (act === 'delete') {
+    if (pendingDelete === id) { deleteHabit(id); pendingDelete = null; }
+    else { pendingDelete = id; renderList(); setTimeout(() => { if (pendingDelete === id) { pendingDelete = null; renderList(); } }, 3000); }
+  }
+});
+
+function startRename(id) {
+  const li = listEl.querySelector(`[data-id="${id}"]`); if (!li) return;
+  const h = state.habits.find(x => x.id === id);
+  const nameEl = li.querySelector('.h-name');
+  const input = document.createElement('input');
+  input.type = 'text'; input.className = 'h-rename-input'; input.maxLength = 24; input.value = h.name; input.id = 'rename-' + id;
+  input.setAttribute('aria-label', 'Yeni ad');
+  nameEl.replaceWith(input);
+  input.focus(); input.select();
+  let done = false;
+  const finish = save => {
+    if (done) return; done = true;
+    const v = input.value.trim();
+    if (save && v) { h.name = v; persist(); }
+    renderList();
+  };
+  input.addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') finish(true); if (ev.key === 'Escape') finish(false); });
+  input.addEventListener('blur', () => finish(true));
+  input.addEventListener('click', ev => ev.stopPropagation());
+}
+
+function deleteHabit(id) {
+  const i = state.habits.findIndex(h => h.id === id);
+  if (i < 0) return;
+  state.habits.splice(i, 1);
+  removePlanet(id);
+  if (selectedId === id) { selectedId = null; flyHome(); }
+  relayout(); persist(); renderList();
+}
+
+$('#addForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('#newName').value.trim(); if (!name) return;
+  const h = { id: uid(), name, color: newColor, minutes: 0, sessions: [], moons: 0 };
+  state.habits.push(h);
+  const p = createPlanet(h);
+  p.radius = p.targetRadius = radiusFor(state.habits.length - 1);
+  p.size = 0.01;
+  $('#newName').value = '';
+  const unused = PALETTE.find(c => !state.habits.some(x => x.color === c));
+  newColor = unused || PALETTE[(PALETTE.indexOf(newColor) + 1) % PALETTE.length];
+  persist(); renderList(); selectHabit(h.id, true);
+});
+
+function selectHabit(id, fly) {
+  selectedId = id;
+  renderList();
+  if (typeof renderTimer === 'function') renderTimer();
+  const p = planets.get(id);
+  if (p && fly) flyTo(p);
+}
+
+/* =====================================================================
+   FAZ 3 — Odak zamanlayıcı, parçacık akışı, tamamlanma
+   ===================================================================== */
+const timer = { durMin: 25, elapsed: 0, running: false, habitId: null, last: performance.now() };
+const RING_LEN = 2 * Math.PI * 88;
+const ringProg = $('#ringProg');
+ringProg.style.strokeDasharray = RING_LEN;
+
+function timerHabit() { return state.habits.find(h => h.id === (timer.habitId || selectedId)); }
+const fmtClock = sec => { sec = Math.max(0, Math.ceil(sec)); return `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`; };
+const fastMode = () => $('#fastMode').checked;
+
+function setDuration(min) {
+  if (timer.running || timer.elapsed > 0) return;
+  timer.durMin = Math.max(1, Math.min(180, Math.round(min)));
+  document.querySelectorAll('[data-min]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.min === timer.durMin)));
+  renderTimer();
+}
+document.querySelectorAll('[data-min]').forEach(b => b.addEventListener('click', () => { $('#customMin').value = ''; setDuration(+b.dataset.min); }));
+$('#customMin').addEventListener('input', e => { const v = +e.target.value; if (v >= 1) setDuration(v); });
+$('#startBtn').addEventListener('click', () => toggleTimer());
+$('#resetBtn').addEventListener('click', () => resetTimer());
+
+function toggleTimer() {
+  if (!timer.running && timer.elapsed === 0) {
+    if (!selectedId) { toast('Önce bir gezegen seç: listeden ya da sahnede tıklayarak.'); return; }
+    timer.habitId = selectedId;
+    const p = planets.get(selectedId);
+    if (p && (!flight || flight.p !== p)) flyTo(p);
+  }
+  timer.running = !timer.running;
+  timer.last = performance.now();
+  ensureAudio();
+  renderTimer();
+}
+function resetTimer() {
+  timer.running = false; timer.elapsed = 0; timer.habitId = null;
+  renderTimer();
+}
+function updateTimer() {
+  const now = performance.now();
+  if (timer.running) {
+    timer.elapsed += (now - timer.last) / 1000 * (fastMode() ? 60 : 1);
+    if (timer.elapsed >= timer.durMin * 60) completeSession();
+    renderTimer();
+  }
+  timer.last = now;
+}
+let lastRender = '';
+function renderTimer() {
+  const total = timer.durMin * 60;
+  const left = total - timer.elapsed;
+  const frac = Math.min(1, timer.elapsed / total);
+  const h = timerHabit();
+  const st = timer.running ? 'odakta' : timer.elapsed > 0 ? 'duraklatıldı' : 'hazır';
+  const key = [fmtClock(left), st, h?.id, h?.name, frac.toFixed(3), timer.durMin].join('|');
+  if (key === lastRender) return;
+  lastRender = key;
+  $('#timeLeft').textContent = fmtClock(left);
+  $('#timerState').textContent = st;
+  ringProg.style.strokeDashoffset = RING_LEN * (1 - frac);
+  ringProg.style.stroke = ringProg.style.color = h ? h.color : 'var(--star)';
+  $('#timerTarget').textContent = h ? h.name : 'gezegen seçilmedi';
+  $('#timerTarget').style.color = h ? h.color : '';
+  $('#startBtn').textContent = timer.running ? 'Duraklat' : timer.elapsed > 0 ? 'Sürdür' : 'Başlat';
+  $('#resetBtn').disabled = timer.elapsed === 0;
+  const locked = timer.running || timer.elapsed > 0;
+  document.querySelectorAll('[data-min], #customMin').forEach(el => el.disabled = locked);
+  $('#mobileTimer').textContent = locked ? `${fmtClock(left)}` : '';
+  document.title = timer.running ? `${fmtClock(left)} · ${h?.name || ''} — Yörünge` : 'Yörünge';
+}
+
+/* ---------- Spiral parçacık akışı (GPU Points) ---------- */
+const STREAM_N = reduceMotion ? 600 : 2200;
+const streamGeo = new THREE.BufferGeometry();
+{
+  const seeds = new Float32Array(STREAM_N * 3);
+  for (let i = 0; i < STREAM_N; i++) seeds.set([Math.random(), Math.random() * Math.PI * 2, Math.random()], i * 3);
+  streamGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(STREAM_N * 3), 3));
+  streamGeo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 3));
+}
+const streamUniforms = {
+  uTime: { value: 0 }, uFrom: { value: new THREE.Vector3() }, uTo: { value: new THREE.Vector3(1, 0, 0) },
+  uAxisA: { value: new THREE.Vector3(0, 1, 0) }, uAxisB: { value: new THREE.Vector3(0, 0, 1) },
+  uColorA: { value: new THREE.Color(1.0, 0.75, 0.45) }, uColorB: { value: new THREE.Color(1, 1, 1) },
+  uIntensity: { value: 0 }, uSpread: { value: 3 }, uPR: { value: renderer.getPixelRatio() },
+};
+const stream = new THREE.Points(streamGeo, new THREE.ShaderMaterial({
+  uniforms: streamUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  vertexShader: `attribute vec3 aSeed;
+    uniform float uTime, uIntensity, uSpread, uPR; uniform vec3 uFrom, uTo, uAxisA, uAxisB, uColorA, uColorB;
+    varying vec3 vColor; varying float vAlpha;
+    void main(){
+      float p = fract(aSeed.x + uTime * 0.22);
+      float env = sin(p * 3.14159);
+      float ang = aSeed.y + p * 4.0 * 6.28318 - uTime * 1.2;
+      float rad = env * uSpread * (0.35 + aSeed.z * 0.9);
+      vec3 pos = mix(uFrom, uTo, p) + (uAxisA * cos(ang) + uAxisB * sin(ang)) * rad;
+      vec4 mv = modelViewMatrix * vec4(pos, 1.);
+      gl_Position = projectionMatrix * mv;
+      vColor = mix(uColorA, uColorB, smoothstep(0.15, 0.95, p)) * (1.4 + aSeed.z);
+      vAlpha = smoothstep(0., 0.06, p) * smoothstep(1., 0.9, p) * uIntensity;
+      gl_PointSize = clamp((1.4 + aSeed.z * 2.6) * uPR * (110. / -mv.z), 1.5, 7. * uPR);
+    }`,
+  fragmentShader: `varying vec3 vColor; varying float vAlpha;
+    void main(){ float d = length(gl_PointCoord - .5); float a = smoothstep(.5, .0, d); gl_FragColor = vec4(vColor, a * a * vAlpha); }`,
+}));
+stream.frustumCulled = false;
+scene.add(stream);
+let streamLevel = 0, streamTime = 0;
+
+function updateStream(dt, motion) {
+  const p = timer.habitId && planets.get(timer.habitId);
+  const want = p ? (timer.running ? 1 : timer.elapsed > 0 ? 0.25 : 0) : 0;
+  streamLevel += (want - streamLevel) * Math.min(1, dt * 2.5);
+  for (const q of planets.values()) q.streaming = q === p ? streamLevel : 0;
+  streamUniforms.uIntensity.value = streamLevel;
+  stream.visible = streamLevel > 0.005;
+  if (!stream.visible || !p) return;
+  streamTime += dt * (timer.running ? 1 : 0.25) * (reduceMotion ? 0.4 : 1) * (fastMode() ? 1.8 : 1);
+  streamUniforms.uTime.value = streamTime;
+  const wp = planetWorldPos(p, tmpV);
+  const dir = tmpV2.copy(wp).normalize();
+  streamUniforms.uFrom.value.copy(dir).multiplyScalar(STAR_R * 1.05);
+  streamUniforms.uTo.value.copy(wp).addScaledVector(dir, -p.size * 0.9);
+  const a = streamUniforms.uAxisA.value.crossVectors(dir, Math.abs(dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize();
+  streamUniforms.uAxisB.value.crossVectors(dir, a).normalize();
+  streamUniforms.uSpread.value = 1.2 + wp.length() * 0.06;
+  streamUniforms.uColorB.value.copy(p.color);
+}
+
+/* ---------- Şok dalgası ---------- */
+const shocks = [];
+const shockGeo = new THREE.RingGeometry(0.92, 1, 96);
+function spawnShock(p, delay = 0, color) {
+  const m = new THREE.Mesh(shockGeo, new THREE.MeshBasicMaterial({ color: color || p.color.clone().multiplyScalar(2), transparent: true, opacity: 0, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }));
+  scene.add(m);
+  shocks.push({ m, p, t: -delay });
+}
+function updateShocks(dt) {
+  for (let i = shocks.length - 1; i >= 0; i--) {
+    const s = shocks[i];
+    s.t += dt / 1.6;
+    if (s.t >= 1) { scene.remove(s.m); s.m.material.dispose(); shocks.splice(i, 1); continue; }
+    if (s.t < 0) continue;
+    planetWorldPos(s.p, s.m.position);
+    s.m.quaternion.copy(camera.quaternion);
+    const k = 1 - Math.pow(1 - s.t, 3);
+    s.m.scale.setScalar(s.p.size * (1.2 + k * 9));
+    s.m.material.opacity = (1 - s.t) * 0.9;
+  }
+}
+
+/* ---------- Tamamlanma ---------- */
+function completeSession() {
+  const h = state.habits.find(x => x.id === timer.habitId);
+  const p = h && planets.get(h.id);
+  const min = timer.durMin;
+  timer.running = false; timer.elapsed = 0; timer.habitId = null;
+  if (!h || !p) { renderTimer(); return; }
+  const before = streakInfo(h).cur;
+  h.sessions.push({ t: Date.now(), min });
+  h.minutes += min;
+  h.moons += 1;
+  state.sample = false;
+  p.targetSize = sizeFor(h.minutes);
+  p.flash = 1;
+  syncMoons(p, true);
+  const newRing = syncRings(p);
+  spawnShock(p); spawnShock(p, 0.25); spawnShock(p, 0.5, new THREE.Color(2, 1.7, 1.3));
+  const after = streakInfo(h).cur;
+  chime();
+  persist(); renderList(); renderTimer();
+  let msg = `${h.name}: +${min} dk. Yörüngeye yeni bir ay girdi.`;
+  if (after > before) msg += ` Seri ${after} gün.`;
+  if (newRing) msg += ` ${after} günlük seriyle yeni halka kazandın!`;
+  toast(msg, 5200);
+}
+
+/* ---------- Ses ve bildirim ---------- */
+let audio = null;
+function ensureAudio() { try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); if (audio.state === 'suspended') audio.resume(); } catch (e) { audio = null; } }
+function chime() {
+  if (!audio) return;
+  try {
+    const t0 = audio.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t0 + i * 0.09);
+      g.gain.linearRampToValueAtTime(0.08, t0 + i * 0.09 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.09 + 1.6);
+      o.connect(g).connect(audio.destination); o.start(t0 + i * 0.09); o.stop(t0 + i * 0.09 + 1.7);
+    });
+  } catch (e) {}
+}
+let toastTimer = null;
+function toast(msg, ms = 3200) {
+  const el = $('#toast');
+  el.textContent = msg; el.hidden = false;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.classList.remove('show'); setTimeout(() => { el.hidden = true; }, 300); }, ms);
+}
+
+renderTimer();
+
+/* =====================================================================
+   FAZ 4 — Kalıcılık, istatistik, klavye
+   ===================================================================== */
+function persist() { state.sample = false; saveState(); }
+
+const WD = ['Pz', 'Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct'];
+const MONTHS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+function onDataChange() {
+  const today = startOfDay(Date.now());
+  const days = Array.from({ length: 14 }, (_, i) => shiftDay(today, i - 13));
+  const perDay = days.map(d => {
+    const next = shiftDay(d, 1);
+    return state.habits.map(h => ({ h, min: h.sessions.reduce((a, s) => a + (s.t >= d && s.t < next ? s.min : 0), 0) })).filter(x => x.min > 0);
+  });
+  const totals = perDay.map(x => x.reduce((a, y) => a + y.min, 0));
+  const max = Math.max(60, ...totals);
+  const scaleMax = Math.ceil(max / 60) * 60;
+  $('#bars').innerHTML = days.map((d, i) => {
+    const date = new Date(d);
+    const segs = perDay[i].map(x => `<span style="height:${x.min / scaleMax * 100}%;background:${x.h.color}"></span>`).join('');
+    const label = `${date.getDate()} ${MONTHS[date.getMonth()]}: ${totals[i]} dk`;
+    return `<div class="bar${i === 13 ? ' today' : ''}" title="${label}" aria-label="${label}" role="img"><div class="stack">${segs}</div><span class="wd">${WD[date.getDay()]}</span></div>`;
+  }).join('');
+  $('#chartMax').textContent = `ölçek ${scaleMax / 60} sa`;
+  const total = state.habits.reduce((a, h) => a + h.minutes, 0);
+  $('#statTotal').textContent = fmtHours(total);
+  $('#statStreak').textContent = Math.max(0, ...state.habits.map(h => streakInfo(h).longest));
+  $('#statToday').textContent = totals[13];
+  $('#sampleNote').hidden = !state.sample;
+}
+$('#clearSample').addEventListener('click', () => {
+  [...planets.keys()].forEach(removePlanet);
+  state.habits = []; selectedId = null; resetTimer(); flyHome();
+  persist(); renderList();
+  toast('Evren boşaldı. Soldaki panelden ilk alışkanlığını ekle.');
+});
+
+addEventListener('keydown', e => {
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.code === 'Space') {
+    if (tag === 'BUTTON') return; // odaktaki düğmenin kendi Space davranışı
+    e.preventDefault(); toggleTimer();
+  } else if (/^[1-9]$/.test(e.key)) {
+    const h = state.habits[+e.key - 1];
+    if (h) selectHabit(h.id, true);
+  } else if (e.key === 'Escape') {
+    selectedId = null; renderList(); renderTimer(); flyHome();
+  }
+});
+
+/* =====================================================================
+   FAZ 5 — Mobil çekmece
+   ===================================================================== */
+const dock = $('#dock');
+const isNarrow = () => matchMedia('(max-width: 760px)').matches;
+function setSheet(open, tab) {
+  if (tab) {
+    dock.dataset.tab = tab;
+    dock.querySelectorAll('[role="tab"]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  }
+  dock.classList.toggle('open', open);
+  $('#sheetToggle').setAttribute('aria-expanded', String(open));
+}
+dock.querySelectorAll('[role="tab"]').forEach(b => b.addEventListener('click', () => {
+  const same = dock.dataset.tab === b.dataset.tab;
+  setSheet(!(same && dock.classList.contains('open')), b.dataset.tab);
+}));
+$('#sheetToggle').addEventListener('click', () => setSheet(!dock.classList.contains('open')));
+// Mobilde: listeden gezegen seçince zamanlayıcıya geç; seans başlayınca çekmeceyi kapat ki akış görünsün
+listEl.addEventListener('click', e => { if (isNarrow() && e.target.closest('[data-act="select"]')) setSheet(true, 'timer'); });
+$('#startBtn').addEventListener('click', () => { if (isNarrow() && timer.running) setTimeout(() => setSheet(false), 350); });
+canvas.addEventListener('pointerdown', () => { if (isNarrow() && dock.classList.contains('open') && dock.dataset.tab !== 'timer') setSheet(false); });
+
+renderList();
+
+/* ---------- Döngü ---------- */
+const clock = new THREE.Clock();
+let elapsed = 0;
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+  const now = performance.now();
+  const motion = reduceMotion ? 0.25 : 1;
+
+  if (intro) {
+    intro.t += dt / intro.dur;
+    const k = easeInOutCubic(Math.min(intro.t, 1));
+    camera.position.lerpVectors(INTRO_POS, HOME_POS, k);
+    camera.lookAt(0, 0, 0);
+    if (intro.t >= 1) { intro = null; controls.enabled = true; lastInteract = now; }
+  } else {
+    const tweening = updateFlight(dt, now);
+    controls.enabled = !tweening;
+    if (!tweening) {
+      if (!reduceMotion && !controls.autoRotate && !selectedId && now - lastInteract > 9000) controls.autoRotate = true;
+      if (selectedId) controls.autoRotate = false;
+      controls.update();
+    }
+  }
+  updatePlanets(dt, motion);
+  updateHover();
+
+  const pulse = 1 + 0.06 * Math.sin(elapsed * 1.8 * motion) + 0.025 * Math.sin(elapsed * 4.3 * motion);
+  starUniforms.uTime.value = elapsed * motion;
+  starUniforms.uPulse.value = pulse;
+  corona.scale.setScalar(44 * (0.96 + 0.08 * (pulse - 1) * 8));
+  halo.material.opacity = 0.14 + 0.05 * Math.sin(elapsed * 1.8 * motion) + streamLevel * 0.12;
+  starUniforms.uBoost.value = streamLevel * 0.8;
+  updateStream(dt, motion);
+  updateTimer();
+  updateShocks(dt);
+
+  starsFar.material.uniforms.uTime.value = elapsed * motion;
+  starsNear.material.uniforms.uTime.value = elapsed * motion;
+  starGroup.rotation.y += dt * 0.004 * motion;
+  starsNear.position.x += ((-mouse.x * 8) - starsNear.position.x) * 0.03;
+  starsNear.position.y += ((mouse.y * 5) - starsNear.position.y) * 0.03;
+  starsFar.position.x += ((-mouse.x * 3) - starsFar.position.x) * 0.03;
+
+  composer.render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  HOME_POS.copy(BASE_HOME).multiplyScalar(viewFit());
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  bloom.resolution.set(innerWidth / 2, innerHeight / 2);
+});
+
+window.__yorunge = { scene, camera, renderer };
+</script>
